@@ -1,0 +1,155 @@
+#include "UbidotsMicroESP8266.h"
+#include <ESP8266WiFi.h>
+#include <LiquidCrystal.h>
+#include "DHT.h" 
+#define DHTPIN 15
+#define DHTTYPE DHT11 
+DHT dht(DHTPIN, DHTTYPE);
+#define TOKEN  "BBFF-uj2aoET6QVmb1nelTQCPvAXzmKfjwc"  // Poner aqui tu TOKEN general de Ubidots
+#define WIFISSID "CNT_SANTANA" // Poner aqui el nombre de tu Wi-Fi
+#define PASSWORD "0200513505" // Poner aqui la clave de tu Wi-Fi
+#define co2Zero 55
+const int rs = D0, en = D1, d4 = D4, d5 = D5, d6 = D6, d7 = D7;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+Ubidots client(TOKEN);
+double air_quality;
+unsigned long lastMillis = 0;
+double COmg;
+double NO;
+void setup(){
+    Serial.begin(115200);
+    dht.begin();
+    delay(10);
+    client.wifiConnection(WIFISSID, PASSWORD);
+    lcd.begin(16, 2);
+delay(10);
+Serial.println("Connecting to ");
+lcd.print("Connecting.... ");
+Serial.println(WIFISSID);
+  client.wifiConnection(WIFISSID, PASSWORD);
+}
+
+void loop(){
+
+  
+
+
+
+
+  
+  
+   if (millis() - lastMillis > 10000) {  ///every 10S
+
+      float humedad = dht.readHumidity();
+      float temperatura = dht.readTemperature();
+      
+            lastMillis = millis();
+            client.add("humrel", humedad);
+            client.add("temperature", temperatura);
+            client.sendAll(true);
+            
+            }
+int co2now[10]; //int array for co2 readings
+
+int co2raw = 0; //int for raw value of co2
+
+int co2comp = 0; //int for compensated co2
+
+int co2ppm = 0; //int for calculated ppm
+
+int zzz = 0; //int for averaging
+
+int grafX = 0; //int for x value of graph
+
+  delay(500);
+lcd.clear();
+lcd.setCursor(0, 0);
+lcd.print("Pollution=");
+air_quality = ((analogRead(A0)));
+lcd.print(air_quality);
+lcd.print("PPM");
+Serial.println(air_quality,DEC);
+
+  float voltaje = air_quality * (5.0 / 1023.0); //Convertimos la lectura en un valor de voltaje
+  float Rs=1000*((5-voltaje)/voltaje);  //Calculamos Rs con un RL de 1k
+  
+  double alcohol=106.18*pow(Rs/230,-1.491); // calculamos la concentración  de alcohol con la ecuación obtenida.
+  COmg =((alcohol*28.01)/24.45);
+  //-------Enviamos los valores por el puerto serial------------
+  Serial.print("adc:");
+  Serial.print(air_quality);
+  Serial.print("    voltaje:");
+  Serial.print(voltaje);
+  Serial.print("    Rs:");
+  Serial.print(Rs);
+  Serial.print("   Co:");
+  Serial.print(alcohol);
+  Serial.println("ppm");
+
+  Serial.print("    COmg:");
+  Serial.print(COmg);
+  
+  Serial.println("mg/m3");
+  delay(100);
+  
+// float voltaje2 = (air_quality * (0.99 / 1023.0)-0.02); //Convertimos la lectura en un valor de voltaje
+//  float Rs2=1000*((4.5-voltaje2)/voltaje2);  //Calculamos Rs con un RL de 1k
+//  
+//  double dioxido=11139*pow(Rs2/510,-3.499); // calculamos la concentración  de alcohol con la ecuación obtenida.
+//  NO =((dioxido*46.01*(1000))/24.45);
+//  //-------Enviamos los valores por el puerto serial------------
+//  Serial.print("adc:");
+//  Serial.print(air_quality);
+//  Serial.print("    voltaje:");
+//  Serial.print(voltaje2);
+//  Serial.print("    Rs:");
+//  Serial.print(Rs2);
+//  Serial.print("   No:");
+//  Serial.print(dioxido);
+//  Serial.println("ppm");
+//
+//  Serial.print("   Noug/m3:");
+//  Serial.print(NO);
+//  
+//  Serial.println("ug/m3");
+//  delay(100);
+
+
+//client.add("Calidad_air", air_quality);
+//client.sendAll(true);
+//delay(2000);
+
+for (int x = 0;x<10;x++){ //samplpe co2 10x over 2 seconds
+
+co2now[x]=air_quality;
+delay(200);
+
+}
+
+for (int x = 0;x<10;x++){ //add samples together
+
+zzz=zzz + co2now[x];
+
+}
+
+co2raw = zzz/10; //divide samples by 10 
+co2comp = co2raw - co2Zero; //get compensated value
+co2ppm = map(co2comp,0,1023,500,5000); //map value for atmospheric levels
+Serial.println(co2ppm, DEC); 
+Serial.println(" ppm");
+
+    client.add("Calidad_air", air_quality);
+//    client.sendAll(true);
+    client.add("CO2ppm", co2ppm);
+    client.add("COppm", alcohol);
+    client.add("COmg/m3", COmg);
+    client.sendAll(true);
+    delay(2000);
+    lcd.clear();
+
+lcd.setCursor(0, 0);
+lcd.print("Pollution=");
+lcd.print(air_quality);
+lcd.print("PPM");
+
+}
